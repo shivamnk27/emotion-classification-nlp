@@ -148,90 +148,91 @@ def eval_model(model, data_loader, loss_fn, device, n_examples):
 history = {'train_acc': [], 'train_loss': [], 'val_acc': [], 'val_loss': []}
 best_accuracy = 0
 
-for epoch in range(EPOCHS):
-    print(f'\nEpoch {epoch + 1}/{EPOCHS}')
-    print('-' * 10)
-    train_acc, train_loss = train_epoch(model, train_data_loader, loss_fn, optimizer, device, scheduler, len(train_df))
-    print(f'Train loss {train_loss:.4f} accuracy {train_acc:.4f}')
-    val_acc, val_loss = eval_model(model, val_data_loader, loss_fn, device, len(val_df))
-    print(f'Validation loss {val_loss:.4f} accuracy {val_acc:.4f}')
-    history['train_acc'].append(train_acc)
-    history['train_loss'].append(train_loss)
-    history['val_acc'].append(val_acc)
-    history['val_loss'].append(val_loss)
-    if val_acc > best_accuracy:
-        torch.save(model.state_dict(), 'best_model_state_distilbert.bin')
-        best_accuracy = val_acc
+if __name__ == '__main__':
+    for epoch in range(EPOCHS):
+        print(f'\nEpoch {epoch + 1}/{EPOCHS}')
+        print('-' * 10)
+        train_acc, train_loss = train_epoch(model, train_data_loader, loss_fn, optimizer, device, scheduler, len(train_df))
+        print(f'Train loss {train_loss:.4f} accuracy {train_acc:.4f}')
+        val_acc, val_loss = eval_model(model, val_data_loader, loss_fn, device, len(val_df))
+        print(f'Validation loss {val_loss:.4f} accuracy {val_acc:.4f}')
+        history['train_acc'].append(train_acc)
+        history['train_loss'].append(train_loss)
+        history['val_acc'].append(val_acc)
+        history['val_loss'].append(val_loss)
+        if val_acc > best_accuracy:
+            torch.save(model.state_dict(), 'best_model_state_distilbert.bin')
+            best_accuracy = val_acc
 
-# Test Evaluation
-model.load_state_dict(torch.load('best_model_state_distilbert.bin'))
-test_acc, test_loss = eval_model(model, test_data_loader, loss_fn, device, len(test_df))
-print(f'\nTest Accuracy: {test_acc:.4f}')
-print(f'Test Loss: {test_loss:.4f}')
+    # Test Evaluation
+    model.load_state_dict(torch.load('best_model_state_distilbert.bin'))
+    test_acc, test_loss = eval_model(model, test_data_loader, loss_fn, device, len(test_df))
+    print(f'\nTest Accuracy: {test_acc:.4f}')
+    print(f'Test Loss: {test_loss:.4f}')
 
-# Get predictions for classification report
-def get_predictions(model, data_loader):
-    model.eval()
-    texts = []
-    predictions = []
-    prediction_probs = []
-    real_values = []
-    with torch.no_grad():
-        for d in tqdm(data_loader, desc="Getting predictions"):
-            texts.extend(d["text"])
-            input_ids = d["input_ids"].to(device)
-            attention_mask = d["attention_mask"].to(device)
-            labels = d["labels"].to(device)
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-            logits = outputs.logits
-            preds = torch.sigmoid(logits) > 0.5
-            predictions.extend(preds)
-            prediction_probs.extend(torch.sigmoid(logits))
-            real_values.extend(labels)
-    predictions = torch.stack(predictions).cpu()
-    prediction_probs = torch.stack(prediction_probs).cpu()
-    real_values = torch.stack(real_values).cpu()
-    return texts, predictions, prediction_probs, real_values
+    # Get predictions for classification report
+    def get_predictions(model, data_loader):
+        model.eval()
+        texts = []
+        predictions = []
+        prediction_probs = []
+        real_values = []
+        with torch.no_grad():
+            for d in tqdm(data_loader, desc="Getting predictions"):
+                texts.extend(d["text"])
+                input_ids = d["input_ids"].to(device)
+                attention_mask = d["attention_mask"].to(device)
+                labels = d["labels"].to(device)
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                logits = outputs.logits
+                preds = torch.sigmoid(logits) > 0.5
+                predictions.extend(preds)
+                prediction_probs.extend(torch.sigmoid(logits))
+                real_values.extend(labels)
+        predictions = torch.stack(predictions).cpu()
+        prediction_probs = torch.stack(prediction_probs).cpu()
+        real_values = torch.stack(real_values).cpu()
+        return texts, predictions, prediction_probs, real_values
 
-y_texts, y_pred, y_pred_probs, y_test = get_predictions(model, test_data_loader)
+    y_texts, y_pred, y_pred_probs, y_test = get_predictions(model, test_data_loader)
 
-# classification report
-from sklearn.metrics import classification_report
+    # classification report
+    from sklearn.metrics import classification_report
 
-print("\nClassification Report:")
-report = classification_report(y_test.numpy(), y_pred.numpy(), target_names=emotion_cols, digits=3, output_dict=True)
+    print("\nClassification Report:")
+    report = classification_report(y_test.numpy(), y_pred.numpy(), target_names=emotion_cols, digits=3, output_dict=True)
 
-# Print per-class metrics
-print(f"{'':<10}| {'precision':<10} | {'recall':<10} | {'f1-score':<10} | {'support':<10}")
-print("-" * 55)
-for emotion in emotion_cols:
-    print(f"{emotion:<10}| {report[emotion]['precision']:<10.3f} | {report[emotion]['recall']:<10.3f} | "
-          f"{report[emotion]['f1-score']:<10.3f} | {int(report[emotion]['support']):<10}")
+    # Print per-class metrics
+    print(f"{'':<10}| {'precision':<10} | {'recall':<10} | {'f1-score':<10} | {'support':<10}")
+    print("-" * 55)
+    for emotion in emotion_cols:
+        print(f"{emotion:<10}| {report[emotion]['precision']:<10.3f} | {report[emotion]['recall']:<10.3f} | "
+            f"{report[emotion]['f1-score']:<10.3f} | {int(report[emotion]['support']):<10}")
 
-# Print averages
-print("\nmicro avg")
-print(f"{report['micro avg']['precision']:.3f}")
-print(f"{report['micro avg']['recall']:.3f}")
-print(f"{report['micro avg']['f1-score']:.3f}")
-print(f"{int(report['micro avg']['support'])}")
+    # Print averages
+    print("\nmicro avg")
+    print(f"{report['micro avg']['precision']:.3f}")
+    print(f"{report['micro avg']['recall']:.3f}")
+    print(f"{report['micro avg']['f1-score']:.3f}")
+    print(f"{int(report['micro avg']['support'])}")
 
-print("\nmacro avg")
-print(f"{report['macro avg']['precision']:.3f}")
-print(f"{report['macro avg']['recall']:.3f}")
-print(f"{report['macro avg']['f1-score']:.3f}")
-print(f"{int(report['macro avg']['support'])}")
+    print("\nmacro avg")
+    print(f"{report['macro avg']['precision']:.3f}")
+    print(f"{report['macro avg']['recall']:.3f}")
+    print(f"{report['macro avg']['f1-score']:.3f}")
+    print(f"{int(report['macro avg']['support'])}")
 
-print("\nweighted avg")
-print(f"{report['weighted avg']['precision']:.3f}")
-print(f"{report['weighted avg']['recall']:.3f}")
-print(f"{report['weighted avg']['f1-score']:.3f}")
-print(f"{int(report['weighted avg']['support'])}")
+    print("\nweighted avg")
+    print(f"{report['weighted avg']['precision']:.3f}")
+    print(f"{report['weighted avg']['recall']:.3f}")
+    print(f"{report['weighted avg']['f1-score']:.3f}")
+    print(f"{int(report['weighted avg']['support'])}")
 
-print("\nsamples avg")
-print(f"{report['samples avg']['precision']:.3f}")
-print(f"{report['samples avg']['recall']:.3f}")
-print(f"{report['samples avg']['f1-score']:.3f}")
-print(f"{int(report['samples avg']['support'])}")
+    print("\nsamples avg")
+    print(f"{report['samples avg']['precision']:.3f}")
+    print(f"{report['samples avg']['recall']:.3f}")
+    print(f"{report['samples avg']['f1-score']:.3f}")
+    print(f"{int(report['samples avg']['support'])}")
 
-print(f"\nMacro-F1: {report['macro avg']['f1-score']}")
+    print(f"\nMacro-F1: {report['macro avg']['f1-score']}")
 
